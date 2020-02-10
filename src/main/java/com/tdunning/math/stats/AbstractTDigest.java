@@ -17,7 +17,13 @@
 
 package com.tdunning.math.stats;
 
+import net.openhft.chronicle.bytes.BytesIn;
+import net.openhft.chronicle.bytes.BytesOut;
+
 import java.nio.ByteBuffer;
+import java.sql.SQLException;
+import java.sql.SQLInput;
+import java.sql.SQLOutput;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -71,6 +77,20 @@ public abstract class AbstractTDigest extends TDigest {
         buf.put((byte) n);
     }
 
+    static void encode(BytesOut stream, int n) {
+        int k = 0;
+        while (n < 0 || n > 0x7f) {
+            byte b = (byte) (0x80 | (0x7f & n));
+            stream.writeByte(b);
+            n = n >>> 7;
+            k++;
+            if (k >= 6) {
+                throw new IllegalStateException("Size is implausibly large");
+            }
+        }
+        stream.writeByte((byte) n);
+    }
+
     static int decode(ByteBuffer buf) {
         int v = buf.get();
         int z = 0x7f & v;
@@ -80,6 +100,21 @@ public abstract class AbstractTDigest extends TDigest {
                 throw new IllegalStateException("Shift too large in decode");
             }
             v = buf.get();
+            z += (v & 0x7f) << shift;
+            shift += 7;
+        }
+        return z;
+    }
+
+    static int decode(BytesIn buf)  {
+        int v = buf.readByte();
+        int z = 0x7f & v;
+        int shift = 7;
+        while ((v & 0x80) != 0) {
+            if (shift > 28) {
+                throw new IllegalStateException("Shift too large in decode");
+            }
+            v = buf.readByte();
             z += (v & 0x7f) << shift;
             shift += 7;
         }

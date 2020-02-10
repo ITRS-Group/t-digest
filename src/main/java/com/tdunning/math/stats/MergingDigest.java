@@ -17,6 +17,9 @@
 
 package com.tdunning.math.stats;
 
+import net.openhft.chronicle.bytes.BytesIn;
+import net.openhft.chronicle.bytes.BytesOut;
+
 import java.nio.ByteBuffer;
 import java.util.AbstractCollection;
 import java.util.ArrayList;
@@ -24,6 +27,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * Maintains a t-digest by collecting new points in a buffer that is then sorted occasionally and merged
@@ -61,7 +65,7 @@ import java.util.List;
  * what the AVLTreeDigest uses.  Speed tests are still not complete so it is uncertain whether the merge
  * strategy is faster than the tree strategy.
  */
-public class MergingDigest extends AbstractTDigest {
+public class MergingDigest extends AbstractTDigest  {
     private final double compression;
 
     // points to the first unused centroid
@@ -789,6 +793,44 @@ public class MergingDigest extends AbstractTDigest {
     }
 
     @Override
+    public void asBytes(BytesOut stream ) {
+        compress();
+        stream.writeInt(Encoding.VERBOSE_ENCODING.code);
+        stream.writeDouble(min);
+        stream.writeDouble(max);
+        stream.writeDouble(compression);
+        stream.writeInt(lastUsedCell);
+        for (int i = 0; i < lastUsedCell; i++) {
+            stream.writeDouble(weight[i]);
+            stream.writeDouble(mean[i]);
+        }
+    }
+
+    private static Logger s_logger = Logger.getAnonymousLogger();
+
+    @Override
+    public void asSmallBytes(BytesOut stream )  {
+        compress();
+        stream.writeInt(Encoding.SMALL_ENCODING.code);    // 4
+        stream.writeDouble(min);
+        stream.writeDouble(max);
+        stream.writeFloat((float) compression);           // + 4
+        stream.writeShort((short) mean.length);           // + 2
+        stream.writeShort((short) tempMean.length);       // + 2
+        stream.writeShort((short) lastUsedCell);          // + 2 = 30
+
+        int x = 7;
+        for (int i = 0; i < lastUsedCell; i++) {
+            stream.writeFloat((float) weight[i]);
+            stream.writeFloat((float) mean[i]);
+        }
+    }
+
+    public void writeSmallBytes() {
+
+    }
+
+    @Override
     public void asSmallBytes(ByteBuffer buf) {
         compress();
         buf.putInt(Encoding.SMALL_ENCODING.code);    // 4
@@ -843,4 +885,47 @@ public class MergingDigest extends AbstractTDigest {
         }
 
     }
+
+    //todo: I don't like replicating this much code, however i also would prefer not to add another level
+    // of abstraction if possible...
+    @SuppressWarnings("WeakerAccess")
+    public static MergingDigest fromSQlInput(BytesIn stream) {
+        int encoding = stream.readInt();
+        if (encoding == Encoding.VERBOSE_ENCODING.code) {
+            double min = stream.readDouble();
+            double max = stream.readDouble();
+            double compression = stream.readDouble();
+            int n = stream.readInt();
+            MergingDigest r = new MergingDigest(compression);
+            r.setMinMax(min, max);
+            r.lastUsedCell = n;
+            for (int i = 0; i < n; i++) {
+                r.weight[i] = stream.readDouble();
+                r.mean[i] = stream.readDouble();
+
+                r.totalWeight += r.weight[i];
+            }
+            return r;
+        } else if (encoding == Encoding.SMALL_ENCODING.code) {
+            double min = stream.readDouble();
+            double max = stream.readDouble();
+            double compression = stream.readFloat();
+            int n = stream.readShort();
+            int bufferSize = stream.readShort();
+            MergingDigest r = new MergingDigest(compression, bufferSize, n);
+            r.setMinMax(min, max);
+            r.lastUsedCell = stream.readShort();
+            for (int i = 0; i < r.lastUsedCell; i++) {
+                r.weight[i] = stream.readFloat();
+                r.mean[i] = stream.readFloat();
+
+                r.totalWeight += r.weight[i];
+            }
+            return r;
+        } else {
+            throw new IllegalStateException("Invalid format for serialized histogram");
+        }
+
+    }
+
 }

@@ -17,6 +17,9 @@
 
 package com.tdunning.math.stats;
 
+import net.openhft.chronicle.bytes.BytesIn;
+import net.openhft.chronicle.bytes.BytesOut;
+
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
@@ -353,6 +356,22 @@ public class AVLTreeDigest extends AbstractTDigest {
     }
 
     @Override
+    public void asBytes(BytesOut stream)  {
+        stream.writeInt(VERBOSE_ENCODING);
+        stream.writeDouble(min);
+        stream.writeDouble(max);
+        stream.writeDouble((float) compression());
+        stream.writeInt(summary.size());
+        for (Centroid centroid : summary) {
+            stream.writeDouble(centroid.mean());
+        }
+
+        for (Centroid centroid : summary) {
+            stream.writeInt(centroid.count());
+        }
+    }
+
+    @Override
     public void asSmallBytes(ByteBuffer buf) {
         buf.putInt(SMALL_ENCODING);
         buf.putDouble(min);
@@ -372,6 +391,28 @@ public class AVLTreeDigest extends AbstractTDigest {
             encode(buf, n);
         }
     }
+
+    @Override
+    public void asSmallBytes(BytesOut stream)  {
+        stream.writeInt(SMALL_ENCODING);
+        stream.writeDouble(min);
+        stream.writeDouble(max);
+        stream.writeDouble(compression());
+        stream.writeInt(summary.size());
+
+        double x = 0;
+        for (Centroid centroid : summary) {
+            double delta = centroid.mean() - x;
+            x = centroid.mean();
+            stream.writeFloat((float) delta);
+        }
+
+        for (Centroid centroid : summary) {
+            int n = centroid.count();
+            encode(stream, n);
+        }
+    }
+
 
     /**
      * Reads a histogram from a byte buffer
@@ -421,4 +462,48 @@ public class AVLTreeDigest extends AbstractTDigest {
         }
     }
 
+    //todo: I don't like replicating this much code, however i also would prefer not to add another level
+    // of abstraction if possible...
+    @SuppressWarnings("WeakerAccess")
+    public static AVLTreeDigest fromSQlInput(BytesIn  buf)  {
+        int encoding = buf.readInt();
+        if (encoding == VERBOSE_ENCODING) {
+            double min = buf.readDouble();
+            double max = buf.readDouble();
+            double compression = buf.readDouble();
+            AVLTreeDigest r = new AVLTreeDigest(compression);
+            r.setMinMax(min, max);
+            int n = buf.readInt();
+            double[] means = new double[n];
+            for (int i = 0; i < n; i++) {
+                means[i] = buf.readDouble();
+            }
+            for (int i = 0; i < n; i++) {
+                r.add(means[i], buf.readInt());
+            }
+            return r;
+        } else if (encoding == SMALL_ENCODING) {
+            double min = buf.readDouble();
+            double max = buf.readDouble();
+            double compression = buf.readDouble();
+            AVLTreeDigest r = new AVLTreeDigest(compression);
+            r.setMinMax(min, max);
+            int n = buf.readInt();
+            double[] means = new double[n];
+            double x = 0;
+            for (int i = 0; i < n; i++) {
+                double delta = buf.readFloat();
+                x += delta;
+                means[i] = x;
+            }
+
+            for (int i = 0; i < n; i++) {
+                int z = decode(buf);
+                r.add(means[i], z);
+            }
+            return r;
+        } else {
+            throw new IllegalStateException("Invalid format for serialized histogram");
+        }
+    }
 }

@@ -17,6 +17,8 @@
 
 package com.tdunning.math.stats;
 
+import net.openhft.chronicle.bytes.BytesOut;
+
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -172,6 +174,15 @@ public abstract class TDigest implements Serializable {
     public abstract void asBytes(ByteBuffer buf);
 
     /**
+     * Serialize this TDigest into a SQLOutput stream for persistent storage via jdbc.
+     * Note that the serialization used is
+     * very straightforward and is considerably larger than strictly necessary.
+     *
+     * @param stream The SQLOutput stream into which the TDigest should be serialized.
+     */
+    public abstract void asBytes(BytesOut stream);
+
+    /**
      * Serialize this TDigest into a byte buffer.  Some simple compression is used
      * such as using variable byte representation to store the centroid weights and
      * using delta-encoding on the centroid means so that floats can be reasonably
@@ -180,6 +191,18 @@ public abstract class TDigest implements Serializable {
      * @param buf The byte buffer into which the TDigest should be serialized.
      */
     public abstract void asSmallBytes(ByteBuffer buf);
+
+    /**
+     * Serialize this TDigest into a SQLOutput stream for persistent storage via jdbc.
+     * Some simple compression is used
+     * such as using variable byte representation to store the centroid weights and
+     * using delta-encoding on the centroid means so that floats can be reasonably
+     * used to store the centroid means.
+     *
+     * @param stream The SQLOutput stream into which the TDigest should be serialized.
+     */
+    public abstract void asSmallBytes(BytesOut stream) ;
+
 
     /**
      * Tell this TDigest to record the original data as much as possible for test

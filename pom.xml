@@ -19,9 +19,9 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.tdunning</groupId>
+    <groupId>com.itrsgroup</groupId>
     <artifactId>t-digest</artifactId>
-    <version>3.2</version>
+    <version>3.2-itrs</version>
 
     <packaging>jar</packaging>
     <name>T-Digest</name>
@@ -102,6 +102,12 @@
             <version>19.0</version>
             <scope>test</scope>
         </dependency>
+            <!-- https://mvnrepository.com/artifact/net.openhft/chronicle-map -->
+        <dependency>
+            <groupId>net.openhft</groupId>
+            <artifactId>chronicle-map</artifactId>
+            <version>3.17.8</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -170,6 +176,7 @@
                     </execution>
                 </executions>
             </plugin>
+            <!--
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
@@ -187,6 +194,7 @@
                     </execution>
                 </executions>
             </plugin>
+        -->
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
